@@ -1,0 +1,8 @@
+   56  cat /etc/securetty 
+   57  echo "ttyS0" >> /etc/securetty 
+   58  exit
+   59  history 
+   60  grubby --update-kernel=ALL -args="console=ttyS0"
+   61  grubby --update-kernel=ALL --args="console=ttyS0"
+   62  reboot
+

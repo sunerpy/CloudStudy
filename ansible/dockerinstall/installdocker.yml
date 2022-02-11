@@ -1,0 +1,84 @@
+---
+- name: Four tasks for install docker.
+  hosts: k8snodes
+  tasks:
+    - name: Transform pkgs
+      copy:
+        #src指定docker rpm包的本机路径
+        src: ~/ISO/dockerrpm
+        dest: /root/
+        force: no
+
+    - name: Enabled temporary repo
+      yum_repository:
+        name: dockerpkg
+        baseurl: file:///root/dockerrpm
+        description: Dockerce
+        enabled: yes
+        gpgcheck: no
+        state: present
+
+    - name: Install docker and enabled it when start.
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - docker-ce-cli
+        - container-selinux
+        - containerd
+        - docker-ce
+
+    - name: Onboot option
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Set ip_forward
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: 1
+        state: present
+        reload: yes
+
+    - name: Set bridge-nf-call-iptables 
+      sysctl:
+        name: net.bridge.bridge-nf-call-iptables
+        value: 1
+        state: present
+        reload: yes
+
+    - name: Set bridge.bridge-nf-call-ip6tables 
+      sysctl:
+        name: net.bridge.bridge-nf-call-ip6tables
+        value: 1
+        state: present
+        reload: yes
+
+    - name: Set profile of HISTSIZE
+      lineinfile:
+        regexp: "^HISTSIZE=*"
+        path: /etc/profile
+        line: "HISTSIZE=30000"
+
+    - name: Remove original file of docker registry
+      file:
+        path: /etc/docker/daemon.json
+        state: absent
+
+    - name: Set docker registry
+      lineinfile:
+        #line: '{"registry-mirrors": ["https://y5wbw67l.mirror.aliyuncs.com"]}'
+        line: "{{ item }}"
+        path: /etc/docker/daemon.json
+        create: True
+        state: present
+      with_items:
+        - '{'
+        - '  "registry-mirrors" : ['
+        - '    "https://y5wbw67l.mirror.aliyuncs.com",'
+        - '    "https://registry.docker-cn.com",'
+        - '    "https://dockerhub.azk8s.cn"'
+        - '  ]'
+        - '}'
+

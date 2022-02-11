@@ -1,0 +1,29 @@
+
+exportfs -rv
+showmount -e
+
+
+vim /etc/exports
+# Use `exportfs -arv` to reload.
+/srv/http/archiso        192.168.122.0/24(rw,sync,no_root_squash,nohide)
+
+
+vim /etc/sysconfig/nfs
+RPCNFSDARGS="-v 4.2"
+
+
+exportfs -ra
+exportfs -rv
+
+vim client fstab
+
+
+systemctl restart nfs-server
+
+
+pvcreate /dev/sdd
+vgextend rhel /dev/sdd
+lvextend -L +10G /dev/rhel/root
+lvextend -l +100%free /dev/rhel/root
+xfs_growfs /dev/rhel/root
+resize2fs

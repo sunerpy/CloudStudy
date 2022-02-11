@@ -1,0 +1,7 @@
+[aur]
+git clone ssh://aur@aur.archlinux.org/${pkgname}
+
+
+[github]
+git remote add origin git@github.com:sunerpy/test.git
+git push -u origin master

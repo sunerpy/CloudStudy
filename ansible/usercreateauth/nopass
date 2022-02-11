@@ -1,0 +1,2 @@
+##password-less sudo for ansible
+admin ALL=(ALL) NOPASSWD:ALL

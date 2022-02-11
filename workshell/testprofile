@@ -1,0 +1,9 @@
+export JAVA_HOME=/usr/local/java_64
+export JAVA_PATH=/usr/local/java_64/bin
+export ORACLE_BASE=/home/db/oracle
+export ORACLE_HOME=/home/db/oracle/product/11.2.0
+export TNS_ADMIN=/home/admin/gitcode/workshell/
+#DBSID设置
+export ORACLE_SID=
+export PATH=.:/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/home/admin/.local/bin:/usr/lib/jvm/default/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl
+export LD_LIBRARY_PATH=/lib:/lib32:/home/admin/lib:

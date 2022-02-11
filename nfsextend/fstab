@@ -1,0 +1,2 @@
+192.168.122.1:/srv/http/archiso /var/www nfs   defaults,vers=4,timeo=900,retrans=5,_netdev    0 0
+

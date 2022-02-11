@@ -1,0 +1,8 @@
+---
+- name: remove some files from remote hosts
+  hosts: all
+  tasks:
+    - name: Using file mod to rm file
+      file:
+        path: /etc/sudoers.d/nopass.sudoers
+        state: absent

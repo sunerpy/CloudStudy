@@ -1,0 +1,13 @@
+---
+- name: Ensure the password is no necessary for sudo
+  hosts: all
+  tasks:
+    - name: sudo without password
+      copy:
+        src: /home/admin/ansibletest/usercreateauth/nopass
+        dest: /etc/sudoers.d/nopass
+        force: yes
+        owner: root
+        group: root
+        mode: '0400'
+

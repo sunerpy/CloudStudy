@@ -1,0 +1,15 @@
+---
+ - name: Create users
+   hosts: all
+   vars_files:
+     - userlist.yml
+   tasks:
+     - name: create user admin
+       user:
+         name: "{{ item.user }}"
+         password: "{{ item.pass }}"
+         groups: wheel
+         state: present
+           #state: absent
+           #remove: true
+       loop: "{{ userlist }}"
