@@ -2,60 +2,112 @@
 - name: Tasks for setting k8snodes.
   hosts: k8snodes
   tasks:
-      - name: Setting k8s hosts.
-        lineinfile:
-          line: "{{ item }}"
-          path: /etc/hosts
-          create: True
-          state: present
-        with_items:
-          - '192.168.122.246 k8snode1'
-          - '192.168.122.245 k8snode2'
-          - '192.168.122.244 k8snode3'
+    - name: Setting k8s hosts.
+      lineinfile:
+        line: "{{ item }}"
+        path: /etc/hosts
+        create: True
+        state: present
+      with_items:
+        - '192.168.122.246 k8snode1'
+        - '192.168.122.245 k8snode2'
+        - '192.168.122.244 k8snode3'
 
-      - name: Setting kernel parameters.
-        sysctl:
-          name: "{{ item.name }}"
-          value: "{{ item.value }}"
-          sysctl_file: /etc/sysctl.d/k8s.conf
-          state: present
-          reload: yes
-        with_items:
-          - { name: 'net.ipv4.ip_forward',value: 1 }
-          - { name: 'net.bridge.bridge-nf-call-iptables',value: 1 }
-          - { name: 'net.bridge.bridge-nf-call-ip6tables',value: 1 }
-          - { name: 'vm.max_map_count',value: 262144 }
+    - name: Setting kernel parameters.
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/k8s.conf
+        state: present
+        reload: yes
+      with_items:
+        - { name: 'net.ipv4.ip_forward',value: 1 }
+        - { name: 'net.bridge.bridge-nf-call-iptables',value: 1 }
+        - { name: 'net.bridge.bridge-nf-call-ip6tables',value: 1 }
+        - { name: 'vm.max_map_count',value: 262144 }
 
-      - name: Setting kernel mod
-        modeprobe:
-          name: "br_netfilter"
-          state: present
-      
-      - name: Setting selinux and firewalld
-        selinux:
-          state: disabled
-        firewalld:
-          state: disabled
-        service:
-          name: firewalld
-          state: stopped
-          enabled: no
-        shell: 
-          swapoff -a
-          sed -r -i '/^[^#].*swap/{s/^.*$/#&/g}' /etc/fstab
+    - name: Setting kernel mod
+      modeprobe:
+        name: "br_netfilter"
+        state: present
+    
+    - name: Setting selinux and firewalld
+      selinux:
+        state: disabled
+      firewalld:
+        state: disabled
+      service:
+        name: firewalld
+        state: stopped
+        enabled: no
+      shell: 
+        swapoff -a
+        sed -r -i '/^[^#].*swap/{s/^.*$/#&/g}' /etc/fstab
+        curl -o /etc/yum.repos.d/Centos-7.repo http://mirrors.aliyun.com/repo/Centos-7.repo
+        curl -o /etc/yum.repos.d/docker-ce.repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 
-      - name: Setting nmcli
-        nmcli:
-          conn_name: eth0
-          ifname: eth0
-          dns4: "223.5.5.5 192.168.122.1"
-          state: present
+    - name: Setting nmcli
+      nmcli:
+        conn_name: eth0
+        ifname: eth0
+        dns4: "223.5.5.5 192.168.122.1"
+        state: present
 
-      - name: Setting docker repo
-        yum_repository:
-          name: Centos-7
-          baseurl: file:///root/dockerrpm
-          description: Dockerce
-          enabled: yes
-          gpgcheck: no
-          state: present
+    - name: Setting docker repo
+      yum_repository:
+        name: Kubernetes
+        baseurl: http://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64file:///root/dockerrpm
+        description: Kubernetes
+        enabled: yes
+        gpgkey: "http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg"
+        gpgcheck: yes
+        state: present
+    - name: Ensure base repo
+      yum_repository:
+        name: "{{ item }}"
+        enabled: yes
+        state: present
+      with_items:
+        - 'Centos-7'
+        - 'docker-ce'
+
+    - name: Check docker and enabled it when start.
+      yum:
+        name: "{{ item }}"
+        state: present
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      with_items:
+        - 'docker-ce-cli'
+        - 'container-selinux'
+        - 'containerd'
+        - 'docker-ce'
+        
+    - name: Set profile of HISTSIZE
+      lineinfile:
+        regexp: "^HISTSIZE=*"
+        path: /etc/profile
+        line: "HISTSIZE=30000"
+
+    - name: Remove original file of docker registry
+      file:
+        path: /etc/docker/daemon.json
+        state: absent
+
+    - name: Set docker registry
+      lineinfile:
+        #line: '{"registry-mirrors": ["https://y5wbw67l.mirror.aliyuncs.com"]}'
+        line: "{{ item }}"
+        path: /etc/docker/daemon.json
+        create: True
+        state: present
+      with_items:
+        - '{'
+        - '  "registry-mirrors" : ['
+        - '    "https://y5wbw67l.mirror.aliyuncs.com",'
+        - '    "https://registry.docker-cn.com",'
+        - '    "https://dockerhub.azk8s.cn"'
+        - '  ]'
+        - '}'
