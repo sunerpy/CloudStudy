@@ -1,0 +1,61 @@
+---
+- name: Tasks for setting k8snodes.
+  hosts: k8snodes
+  tasks:
+      - name: Setting k8s hosts.
+        lineinfile:
+          line: "{{ item }}"
+          path: /etc/hosts
+          create: True
+          state: present
+        with_items:
+          - '192.168.122.246 k8snode1'
+          - '192.168.122.245 k8snode2'
+          - '192.168.122.244 k8snode3'
+
+      - name: Setting kernel parameters.
+        sysctl:
+          name: "{{ item.name }}"
+          value: "{{ item.value }}"
+          sysctl_file: /etc/sysctl.d/k8s.conf
+          state: present
+          reload: yes
+        with_items:
+          - { name: 'net.ipv4.ip_forward',value: 1 }
+          - { name: 'net.bridge.bridge-nf-call-iptables',value: 1 }
+          - { name: 'net.bridge.bridge-nf-call-ip6tables',value: 1 }
+          - { name: 'vm.max_map_count',value: 262144 }
+
+      - name: Setting kernel mod
+        modeprobe:
+          name: "br_netfilter"
+          state: present
+      
+      - name: Setting selinux and firewalld
+        selinux:
+          state: disabled
+        firewalld:
+          state: disabled
+        service:
+          name: firewalld
+          state: stopped
+          enabled: no
+        shell: 
+          swapoff -a
+          sed -r -i '/^[^#].*swap/{s/^.*$/#&/g}' /etc/fstab
+
+      - name: Setting nmcli
+        nmcli:
+          conn_name: eth0
+          ifname: eth0
+          dns4: "223.5.5.5 192.168.122.1"
+          state: present
+
+      - name: Setting docker repo
+        yum_repository:
+          name: Centos-7
+          baseurl: file:///root/dockerrpm
+          description: Dockerce
+          enabled: yes
+          gpgcheck: no
+          state: present
