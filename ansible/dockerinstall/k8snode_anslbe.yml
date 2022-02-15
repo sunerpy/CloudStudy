@@ -27,63 +27,69 @@
         - { name: 'vm.max_map_count',value: 262144 }
 
     - name: Setting kernel mod
-      modeprobe:
+      modprobe:
         name: "br_netfilter"
         state: present
     
     - name: Setting selinux and firewalld
       selinux:
         state: disabled
-      firewalld:
-        state: disabled
+    - name: Setting firewalld option on boot
       service:
         name: firewalld
         state: stopped
         enabled: no
+    - name: Shell script
       shell: 
-        swapoff -a
-        sed -r -i '/^[^#].*swap/{s/^.*$/#&/g}' /etc/fstab
-        curl -o /etc/yum.repos.d/Centos-7.repo http://mirrors.aliyun.com/repo/Centos-7.repo
-        curl -o /etc/yum.repos.d/docker-ce.repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+        cmd: |
+          swapoff -a
+          sed -r -i '/^[^#].*swap/{s/^.*$/#&/g}' /etc/fstab
+          curl -o /etc/yum.repos.d/Centos-7.repo http://mirrors.aliyun.com/repo/Centos-7.repo
+          curl -o /etc/yum.repos.d/docker-ce.repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 
     - name: Setting nmcli
       nmcli:
         conn_name: eth0
         ifname: eth0
-        dns4: "223.5.5.5 192.168.122.1"
+        dns4:
+        - 223.5.5.5
+        - 192.168.122.1
         state: present
 
     - name: Setting docker repo
       yum_repository:
         name: Kubernetes
-        baseurl: http://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64file:///root/dockerrpm
+        baseurl: http://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64
         description: Kubernetes
         enabled: yes
-        gpgkey: "http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg"
+        gpgkey: "http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg \n http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg"
         gpgcheck: yes
         state: present
-    - name: Ensure base repo
-      yum_repository:
-        name: "{{ item }}"
-        enabled: yes
-        state: present
       with_items:
-        - 'Centos-7'
-        - 'docker-ce'
+        - 'http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg'
+        - 'http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg'
+
+    - name: Command for yum_repository
+      shell:
+        cmd: |
+          yum clean all
+          yum makecache
 
     - name: Check docker and enabled it when start.
       yum:
         name: "{{ item }}"
         state: present
-      service:
-        name: docker
-        state: started
-        enabled: yes
       with_items:
         - 'docker-ce-cli'
         - 'container-selinux'
         - 'containerd'
         - 'docker-ce'
+
+    - name: Enable docker on boot
+      service:
+        name: docker
+        state: started
+        enabled: yes
         
     - name: Set profile of HISTSIZE
       lineinfile:
