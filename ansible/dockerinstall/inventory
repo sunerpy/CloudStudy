@@ -4,6 +4,9 @@ server[a:d]
 [k8smaster]
 k8snode1
 
+[k8sslave]
+k8snode[2:3]
+
 [k8snodes]
 k8snode[1:3]
 

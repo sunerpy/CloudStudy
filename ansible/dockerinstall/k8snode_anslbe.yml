@@ -111,7 +111,7 @@
         state: present
       with_items:
         - '{'
-        - '"exec-opts" : [ "native.cgroupdriver=system" ],'
+        - '"exec-opts" : [ "native.cgroupdriver=systemd" ],'
         - '  "registry-mirrors" : ['
         - '    "https://y5wbw67l.mirror.aliyuncs.com",'
         - '    "https://registry.docker-cn.com",'
@@ -123,7 +123,7 @@
       service:
         name: docker
         state: restarted
-        enabled: yes
+        # enabled: yes
     
     - name: Install needed k8s pkgs
       ansible.builtin.package:
@@ -135,9 +135,12 @@
     
     - name: K8s service Onboot
       service:
-        name: kubelet
+        name: "{{ item }}"
         state: started
         enabled: yes
+      with_items:
+        - kubelet
+        - docker
   tags: allnodesmod
 
 - name: Tasks for setting k8s master.
@@ -147,6 +150,7 @@
       shell:
         cmd: ls /root/kubeadm.yaml
       register: returnmsg
+      ignore_errors: True
 
     - name: k8s init settings
       shell:
@@ -196,6 +200,7 @@
         cmd:
           docker images |grep "kube-apiserver"
       register: return_local_images_msg
+      ignore_errors: True
     
     - name: k8s images pull
       shell:
@@ -208,6 +213,7 @@
     - name: k8sinit.json check
       shell: ls /root/k8sinit.json
       register: return_init_json_msg
+      ignore_errors: True
 
     - name: k8s init settings
       shell:
@@ -218,15 +224,32 @@
       register: return_init_msg
       when: return_init_json_msg.rc != 0
 
-    - name: k8s init once.
+    - name: k8s init once and save result.stdout in json file
       shell:
         cmd:
-          echo "{{ return_init_msg }}" > k8sinit.json
+          echo "{{ return_init_msg.stdout }}" > k8sinit.json
       args:
         chdir: /root/
       when: return_init_msg.rc == 0
 
+    - name: kubectl settings
+      shell:
+        cmd: |
+          mkdir -p $HOME/.kube
+          sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+          sudo chown $(id -u):$(id -g) $HOME/.kube/config
+      when: return_init_json_msg.rc == 0
 
+    -name: Getting remote file in ansible node .
+      fetch:
+        src: /root/k8sinit.json
+        dest: /home/admin/CloudStudy/ansible/dockerinstall/
+
+
+
+- name: Tasks for setting k8s slave
+  hosts: k8sslave
+  tasks:
     - name: msg tesst
       debug:
         msg: " etho ip is {{ ansible_eth0['ipv4']['address'] }} \n {{ return_init_msg }}"
