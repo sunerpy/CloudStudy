@@ -1,6 +1,9 @@
 [webservers]
 server[a:d]
 
+[k8smaster]
+k8snode1
+
 [k8snodes]
 k8snode[1:3]
 

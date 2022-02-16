@@ -47,6 +47,15 @@
           curl -o /etc/yum.repos.d/Centos-7.repo http://mirrors.aliyun.com/repo/Centos-7.repo
           curl -o /etc/yum.repos.d/docker-ce.repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 
+    - name: Install needed network manager libs
+      ansible.builtin.package:
+        name:
+          - NetworkManager-libnm
+          - nm-connection-editor
+          - libsemanage-python
+          - policycoreutils-python
+        state: present
+
     - name: Setting nmcli
       nmcli:
         conn_name: eth0
@@ -65,9 +74,6 @@
         gpgkey: "http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg \n http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg"
         gpgcheck: yes
         state: present
-      with_items:
-        - 'http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg'
-        - 'http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg'
 
     - name: Command for yum_repository
       shell:
@@ -85,12 +91,6 @@
         - 'containerd'
         - 'docker-ce'
 
-    - name: Enable docker on boot
-      service:
-        name: docker
-        state: started
-        enabled: yes
-        
     - name: Set profile of HISTSIZE
       lineinfile:
         regexp: "^HISTSIZE=*"
@@ -111,9 +111,123 @@
         state: present
       with_items:
         - '{'
+        - '"exec-opts" : [ "native.cgroupdriver=system" ],'
         - '  "registry-mirrors" : ['
         - '    "https://y5wbw67l.mirror.aliyuncs.com",'
         - '    "https://registry.docker-cn.com",'
         - '    "https://dockerhub.azk8s.cn"'
         - '  ]'
         - '}'
+    
+    - name: Enable docker on boot
+      service:
+        name: docker
+        state: restarted
+        enabled: yes
+    
+    - name: Install needed k8s pkgs
+      ansible.builtin.package:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+    
+    - name: K8s service Onboot
+      service:
+        name: kubelet
+        state: started
+        enabled: yes
+  tags: allnodesmod
+
+- name: Tasks for setting k8s master.
+  hosts: k8smaster
+  tasks:
+    - name: k8s kubeadm.yaml check.
+      shell:
+        cmd: ls /root/kubeadm.yaml
+      register: returnmsg
+
+    - name: k8s init settings
+      shell:
+        cmd:
+          kubeadm config print init-defaults > kubeadm.yaml
+      args:
+        chdir: /root/
+      when: returnmsg.rc != 0
+
+    - name: Set profile of kubeadm.yaml
+      lineinfile:
+        regexp: " *advertiseAddress"
+        path: /root/kubeadm.yaml
+        line: "  advertiseAddress: {{ ansible_eth0['ipv4']['address'] }}"
+        backrefs: yes
+
+    - name: Modify imageRepository with aliyun
+      lineinfile:
+        regexp: "^imageRepository:"
+        path: /root/kubeadm.yaml
+        line: "imageRepository: registry.aliyuncs.com/google_containers"
+        backrefs: yes
+
+    - name: Modify k8s master node 
+      lineinfile:
+        regexp: "^ *name:"
+        path: /root/kubeadm.yaml
+        line: "  name: k8snode1"
+        backrefs: yes
+
+    - name: Modify podsubnet with 10.244.0.0/16
+      lineinfile:
+        insertafter: "^ *dnsDomain"
+        path: /root/kubeadm.yaml
+        line: "  podSubnet: 10.244.0.0/16  # Pod 网段,flannel插件需要使用这个网段"
+
+    - name: k8s images list
+      shell:
+        cmd:
+          kubeadm config images list --config kubeadm.yaml
+      args:
+        chdir: /root/
+      register: return_image_msg
+
+    - name: k8s images check
+      shell:
+        cmd:
+          docker images |grep "kube-apiserver"
+      register: return_local_images_msg
+    
+    - name: k8s images pull
+      shell:
+        cmd:
+          kubeadm config images pull --config kubeadm.yaml
+      args:
+        chdir: /root/
+      when: return_image_msg.rc == 0 and return_local_images_msg.rc != 0
+
+    - name: k8sinit.json check
+      shell: ls /root/k8sinit.json
+      register: return_init_json_msg
+
+    - name: k8s init settings
+      shell:
+        cmd:
+          kubeadm init --config kubeadm.yaml
+      args:
+        chdir: /root/
+      register: return_init_msg
+      when: return_init_json_msg.rc != 0
+
+    - name: k8s init once.
+      shell:
+        cmd:
+          echo "{{ return_init_msg }}" > k8sinit.json
+      args:
+        chdir: /root/
+      when: return_init_msg.rc == 0
+
+
+    - name: msg tesst
+      debug:
+        msg: " etho ip is {{ ansible_eth0['ipv4']['address'] }} \n {{ return_init_msg }}"
+        # imageRepository:
