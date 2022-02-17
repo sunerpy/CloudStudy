@@ -11,4 +11,4 @@
         #key: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"  需要填写本地主机的公钥路径
         key: "{{ lookup('file', '/home/admin/.ssh/id_rsa.pub') }}"
         state: present
-        exclusive: yes
+        exclusive: no    #是否移除authorized_keys文件中其它非指定key

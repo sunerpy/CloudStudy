@@ -240,7 +240,7 @@
           sudo chown $(id -u):$(id -g) $HOME/.kube/config
       when: return_init_json_msg.rc == 0
 
-    -name: Getting remote file in ansible node .
+    - name: Getting remote file in ansible node .
       fetch:
         src: /root/k8sinit.json
         dest: /home/admin/CloudStudy/ansible/dockerinstall/
