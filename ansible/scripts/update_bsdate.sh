@@ -7,7 +7,7 @@ export LANG=en_US.utf-8
 #    @Version :   1.0
 #    @Contact :   sunerpy<nkuzhangshn@gmail.com>
 #    @Desc    :   None
-
+#   user_scripts/zhangshaonan.zh/update_bsdate.sh {{appUser}} {{envLine}} {{dbChange}} {{dbSid}}
 LOGFILE=/tmp/acrs.log
 date >${LOGFILE}
 
@@ -15,26 +15,33 @@ appUser=$1
 envLine=$2
 dbChange=$3
 dbSid=$4
+envLine=$(echo "$envLine" | tr '[:upper:]' '[:lower:]')
 
 logDebug() {
-    msg=$1
-    echo "[DEBUG] [$(date "+%Y-%m-%d %H:%M:%S")] ${msg} " >>${LOGFILE}
+    debugMsg=$1
+    echo "[DEBUG] [$(date "+%Y-%m-%d %H:%M:%S")] ${debugMsg} " >>${LOGFILE}
 }
 
 logINfo() {
-    msg=$1
-    echo "[INFO]  [$(date "+%Y-%m-%d %H:%M:%S")] ${msg} " >>${LOGFILE}
+    infoMsg=$1
+    echo "[INFO]  [$(date "+%Y-%m-%d %H:%M:%S")] ${infoMsg} " >>${LOGFILE}
 }
 
 logError() {
-    msg=$1
-    echo "[ERROR] [$(date "+%Y-%m-%d %H:%M:%S")] ${msg} " >>${LOGFILE}
+    errMsg=$1
+    if [ -n "$2" ]; then
+        exitCode=$2
+    else
+        exitCode=1
+    fi
+    echo "[ERROR] [$(date "+%Y-%m-%d %H:%M:%S")] ${errMsg} " >>${LOGFILE}
+    exit "${exitCode}"
 }
 
-acrsExit() {
-    exitCode=$1
-    logINfo "任务日志${LOGFILE}"
-    exit "${exitCode}"
+suCmd() {
+    osuser=$1
+    cmd=$2
+    su - "${osuser}" -c "${cmd}"
 }
 
 suCmd() {
@@ -56,7 +63,7 @@ getMedia() {
     logDebug "开始下载$file"
     logDebug "使用洋桥介质库站点"
     filePath="http://128.199.43.67:1080/media/upload/zsn/$file"
-    
+
     wget -t 2 --connect-timeout=20 "$filePath" &>/dev/null
     if [ $? -ne 0 ]; then
         logError "文件$file下载失败."
@@ -66,10 +73,29 @@ getMedia() {
     fi
 }
 
-if [ $(id -u "$appUser") -eq 0 ]; then
-    logError "The user cannot be root!"
-    acrsExit 1
+#Parameters judge:
+if [ $# -ne 4 ] && [ $# -ne 3 ]; then
+    logError "Parameters wrong."
 fi
+
+id -u "${appUser}" &>/dev/null
+if [ $? -ne 0 ] || [ $(id -u "$appUser") -eq 0 ]; then
+    logError "The user ${appUser} is not existting. "
+fi
+
+envRanges=(pl1 pl2 pl3 pl4 vt)
+envNum=0
+for envRange in "${envRanges[@]}"; do
+    if [ "${envLine}" == "${envRange}" ]; then
+        envNum+=1
+        break
+    fi
+done
+
+if [ ${envNum} -ne 1 ]; then
+    logError "Env is out of range."
+fi
+
 dateDir=/opt/biz_date
 if [ -d ${dateDir} ]; then
     if [ ! -d ${dateDir}_$(date +%Y%m%d) ]; then
@@ -79,8 +105,24 @@ if [ -d ${dateDir} ]; then
 else
     mkdir ${dateDir}
 fi
-cd ${dateDir} || acrsExit 2
-bsdateFile="xxxx${envLine}.tar.gz"
+
+cd ${dateDir} || logError "${dateDir} maybe is not existting."
+if [ "${dbChange}" == "Y" ]; then
+    #oracle judge
+    suCmd oracle "sqlplus ${dbSid}"
+    oracleJudge=1
+    bsdateFile="xxxx${envLine}.tar.gz"
+elif [ "${dbChange}" == "N" ]; then
+    bsdateFile="xxxx${envLine}.tar.gz"
+else
+    logError "Parameters wrong"
+fi
+
 getMedia "jrsc/bsdate/${bsdateFile}"
 tar xf "${bsdateFile}"
+sed -i "/APP_USER/cAPP_USER=$appUser"
+if [ ${oracleJudge} -eq 1 ]; then
+    sed -i "/db_conn/cdb_conn_inf=${dbSid}"
+fi
 
+logINfo "Success!"
