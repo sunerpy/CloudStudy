@@ -141,7 +141,7 @@
       with_items:
         - kubelet
         - docker
-  tags: allnodesmod
+  tags: k8stask1
 
 - name: Tasks for setting k8s master.
   hosts: k8smaster
@@ -214,6 +214,13 @@
       shell: ls /root/k8sinit.json
       register: return_init_json_msg
       ignore_errors: True
+    - name: k8sinit.json rm
+      shell: 
+        cmd: |
+          kubectl reset -f
+          rm -f k8sinit.json
+      register: return_init_json_rm_msg
+      ignore_errors: True
 
     - name: k8s init settings
       shell:
@@ -244,7 +251,7 @@
       fetch:
         src: /root/k8sinit.json
         dest: /home/admin/CloudStudy/ansible/dockerinstall/
-
+  tags: k8stask2
 
 
 - name: Tasks for setting k8s slave
@@ -262,12 +269,41 @@
 
     - name: k8s slave join
       shell:
-        cmd: "{{ return_k8s_join_msg.stdout }}"
+        cmd: |
+          kubectl reset -f
+          "{{ return_k8s_join_msg.stdout }}"
       register: return_k8s_joincode_msg
+    - name: debug info
+      debug: "return code is {{ return_k8s_joincode_msg.rc  }}"
+  tags: k8stask3
 
 - name: Tasks for k8smaster
   hosts: k8smaster
   tasks:
+    # - name: Install flannel
+    #   uri:
+    #     url: https://raw.githubusercontent.com/coreos/flannel/2140ac876ef134e0ed5af15c65e414cf26827915/Documentation/kube-flannel.yml
+    #     dest: /root/kube-flannel.yml
+    #   when: return_local_images_msg.rc == 0
+    - name: Push flannel.yml
+      copy:
+        src: kube-flannel.yml
+        dest: /root/kube-flannel.yml
+      # when: return_k8s_joincode_msg.rc == 0
+    - name: Modify flannel network and pull images
+      shell:
+        cmd: |
+          docker pull quay.io/coreos/flannel:v0.11.0-amd64
+          kubectl create -f kube-flannel.yml
+          kubectl taint node k8s-master node-role.kubernetes.io/master:NoSchedule-
+  tags: k8stask4
+
+
+
+
+
+
+
     
 
     #   debug:
