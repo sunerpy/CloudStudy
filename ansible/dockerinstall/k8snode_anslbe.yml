@@ -227,7 +227,7 @@
     - name: k8s init once and save result.stdout in json file
       shell:
         cmd:
-          echo "{{ return_init_msg.stdout }}" > k8sinit.json
+          echo "{{ return_init_msg.stdout }}" > /root/k8sinit.json
       args:
         chdir: /root/
       when: return_init_msg.rc == 0
@@ -250,7 +250,26 @@
 - name: Tasks for setting k8s slave
   hosts: k8sslave
   tasks:
-    - name: msg tesst
-      debug:
-        msg: " etho ip is {{ ansible_eth0['ipv4']['address'] }} \n {{ return_init_msg }}"
+    - name: copy k8smaster file to slave
+      copy:
+        src: /home/admin/CloudStudy/ansible/dockerinstall/k8snode1/root/k8sinit.json
+        dest: /root/k8sinit.json
+
+    - name: k8smaster init code
+      shell:
+        cmd: sed -n '/kubeadm join/p' /root/k8sinit.json
+      register: return_k8s_join_msg
+
+    - name: k8s slave join
+      shell:
+        cmd: "{{ return_k8s_join_msg.stdout }}"
+      register: return_k8s_joincode_msg
+
+- name: Tasks for k8smaster
+  hosts: k8smaster
+  tasks:
+    
+
+    #   debug:
+    #     msg: ' etho ip is "{{ return_init_msg }}" '
         # imageRepository:

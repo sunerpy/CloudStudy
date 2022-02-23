@@ -1,0 +1,16 @@
+- name: Tasks for setting k8s slave
+  hosts: k8sslave
+  tasks:
+    - name: k8smaster init code
+      shell:
+        cmd: sed -n '/ls/p' /root/test
+      register: return_k8s_join_msg
+    
+    - name: shell test
+      shell:
+        cmd: "{{ return_k8s_join_msg.stdout }}"
+      register: return_code_msg
+
+    - name: shell
+      shell:
+        cmd: echo "{{ return_code_msg.stdout }}">>/root/tmp
