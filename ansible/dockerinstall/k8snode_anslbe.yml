@@ -210,14 +210,14 @@
         chdir: /root/
       when: return_image_msg.rc == 0 and return_local_images_msg.rc != 0
 
-    - name: k8sinit.json check
-      shell: ls /root/k8sinit.json
-      register: return_init_json_msg
-      ignore_errors: True
+    # - name: k8sinit.json check
+    #   shell: ls /root/k8sinit.json
+    #   register: return_init_json_msg
+    #   ignore_errors: True
     - name: k8sinit.json rm
       shell: 
         cmd: |
-          kubectl reset -f
+          kubeadm reset -f
           rm -f k8sinit.json
       register: return_init_json_rm_msg
       ignore_errors: True
@@ -229,7 +229,7 @@
       args:
         chdir: /root/
       register: return_init_msg
-      when: return_init_json_msg.rc != 0
+      # when: return_init_json_msg.rc != 0
 
     - name: k8s init once and save result.stdout in json file
       shell:
@@ -237,15 +237,19 @@
           echo "{{ return_init_msg.stdout }}" > /root/k8sinit.json
       args:
         chdir: /root/
-      when: return_init_msg.rc == 0
+      # when: return_init_json_rm_msg.rc == 0
 
+          # mkdir -p $HOME/.kube
+          # sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+          # sudo chown $(id -u):$(id -g) $HOME/.kube/config
     - name: kubectl settings
       shell:
         cmd: |
-          mkdir -p $HOME/.kube
-          sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-          sudo chown $(id -u):$(id -g) $HOME/.kube/config
-      when: return_init_json_msg.rc == 0
+          mkdir -p /root/.kube
+          sudo cp -f /etc/kubernetes/admin.conf /root/.kube/config
+          sudo chown 0:0 /root/.kube/config
+          export KUBECONFIG=/etc/kubernetes/admin.conf
+      when: return_init_msg.rc == 0
 
     - name: Getting remote file in ansible node .
       fetch:
@@ -264,18 +268,36 @@
 
     - name: k8smaster init code
       shell:
-        cmd: sed -n '/kubeadm join/p' /root/k8sinit.json
+        cmd: sed -n '/kubeadm join/s/\t/ /g p' /root/k8sinit.json
       register: return_k8s_join_msg
 
+    - name: debug info1
+      debug: 
+        msg: "return code is {{ return_k8s_join_msg.rc  }}\n {{ return_k8s_join_msg.stdout }}"
     - name: k8s slave join
       shell:
         cmd: |
-          kubectl reset -f
-          "{{ return_k8s_join_msg.stdout }}"
+          kubeadm reset -f
+          {{return_k8s_join_msg.stdout}}
       register: return_k8s_joincode_msg
     - name: debug info
       debug: "return code is {{ return_k8s_joincode_msg.rc  }}"
   tags: k8stask3
+
+- name: Tasks for all nodes
+  hosts: k8snodes
+  tasks:
+    - name: Modify auto complete.
+      lineinfile:
+        regexp: "source /usr/share/bash-completion"
+        path: /root/.bash_profile
+        line: "source /usr/share/bash-completion/bash_completion"
+    - name: Modify auto complete2.
+      lineinfile:
+        regexp: "kubectl completion bash"
+        path: /root/.bash_profile
+        line: "source <(kubectl completion bash)"
+  tags: k8stask4
 
 - name: Tasks for k8smaster
   hosts: k8smaster
@@ -294,9 +316,9 @@
       shell:
         cmd: |
           docker pull quay.io/coreos/flannel:v0.11.0-amd64
-          kubectl create -f kube-flannel.yml
-          kubectl taint node k8s-master node-role.kubernetes.io/master:NoSchedule-
-  tags: k8stask4
+          kubectl apply -f kube-flannel.yml
+          kubectl taint node k8snode1 node-role.kubernetes.io/master:NoSchedule-
+  tags: k8stask5
 
 
 
