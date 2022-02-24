@@ -219,6 +219,8 @@
         cmd: |
           kubeadm reset -f
           rm -f k8sinit.json
+          rm -rf /root/.kube
+          rm -rf /var/lib/cni/
       register: return_init_json_rm_msg
       ignore_errors: True
 
@@ -318,6 +320,23 @@
           docker pull quay.io/coreos/flannel:v0.11.0-amd64
           kubectl apply -f kube-flannel.yml
           kubectl taint node k8snode1 node-role.kubernetes.io/master:NoSchedule-
+
+    - name: Verify master.
+      shell:
+        cmd: |
+          kubectl get nodes
+          STATE=$(kubectl get nodes|tail -n +2|awk '{print $2}')
+          for i in ${STATE};do [ $i != "Ready" ] && echo "error" ; done
+      register: return_nodes_state_msg
+
+    - name: Verify master again
+      shell:
+        cmd:
+          echo "Successfully"
+      when: return_nodes_state_msg.stdout != "error"
+
+      
+
   tags: k8stask5
 
 

@@ -32,7 +32,7 @@
 [control-plane] Creating static Pod manifest for kube-scheduler
 [etcd] Creating static Pod manifest for local etcd in /etc/kubernetes/manifests
 [wait-control-plane] Waiting for the kubelet to boot up the control plane as static Pods from directory /etc/kubernetes/manifests. This can take up to 4m0s
-[apiclient] All control plane components are healthy after 6.002367 seconds
+[apiclient] All control plane components are healthy after 6.504839 seconds
 [upload-config] Storing the configuration used in ConfigMap kubeadm-config in the kube-system Namespace
 [kubelet] Creating a ConfigMap kubelet-config-1.23 in namespace kube-system with the configuration for the kubelets in the cluster
 NOTE: The kubelet-config-1.23 naming of the kubelet ConfigMap is deprecated. Once the UnversionedKubeletConfigMap feature gate graduates to Beta the default name will become just kubelet-config. Kubeadm upgrade will handle this transition transparently.
@@ -68,4 +68,4 @@ Run kubectl apply -f [podnetwork].yaml with one of the options listed at:
 
 Then you can join any number of worker nodes by running the following on each as root:
 
-kubeadm join 192.168.122.246:6443 --token abcdef.0123456789abcdef 	--discovery-token-ca-cert-hash sha256:daa78d718062df9a40d4f258f94111e0f68888823d30444173b34b73080009cf 
+kubeadm join 192.168.122.246:6443 --token abcdef.0123456789abcdef 	--discovery-token-ca-cert-hash sha256:8a2270449055bd2090fdc916c8a3bc1192b82cc849dcdad7846d14ebc9f362d8 
