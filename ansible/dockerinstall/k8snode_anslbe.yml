@@ -334,9 +334,6 @@
         cmd:
           echo "Successfully"
       when: return_nodes_state_msg.stdout != "error"
-
-      
-
   tags: k8stask5
 
 
