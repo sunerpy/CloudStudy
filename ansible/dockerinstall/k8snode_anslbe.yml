@@ -336,6 +336,9 @@
       when: return_nodes_state_msg.stdout != "error"
   tags: k8stask5
 
+#
+# dashboard  kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.5.0/aio/deploy/recommended.yaml
+
 
 
 
