@@ -320,21 +320,65 @@
           docker pull quay.io/coreos/flannel:v0.11.0-amd64
           kubectl apply -f kube-flannel.yml
           kubectl taint node k8snode1 node-role.kubernetes.io/master:NoSchedule-
+  tags: k8stask5
 
+- name: dashboard tasks
+  hosts: k8snode1
+  tasks:
     - name: Verify master.
       shell:
-        cmd: |
-          kubectl get nodes
-          STATE=$(kubectl get nodes|tail -n +2|awk '{print $2}')
-          for i in ${STATE};do [ $i != "Ready" ] && echo "error" ; done
+        cmd: 
+          kubectl get nodes|tail -n +2|awk '{print $2}'|grep -v Ready
       register: return_nodes_state_msg
-
+      ignore_errors: True
     - name: Verify master again
       shell:
         cmd:
           echo "Successfully"
-      when: return_nodes_state_msg.stdout != "error"
-  tags: k8stask5
+      when: return_nodes_state_msg.rc != 0
+    - name: Deploy dashboard
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: 'recommended.yaml', dest: '/root/recommended.yaml' }
+        - { src: 'admin.conf', dest: '/root/admin.conf' }
+
+    - name: Modify dashboard yml
+      shell:
+        cmd: |
+          kubectl apply -f recommended.yaml
+          kubectl -n  kubernetes-dashboard get svc
+      register: return_k8s_dashboard_msg
+    - name: Get port msg
+      shell:
+        cmd:
+          echo "{{ return_k8s_dashboard_msg.stdout }}" > /root/dashboard.info
+          awk '/dashboard/{print $5}'
+      register: return_k8s_dashboard_port_msg
+    - name: Get dashboard info.
+      fetch:
+        src: /root/dashboard.info
+        dest: ./
+    # - name: Create serviceaccount.
+    #   shell:
+    #     cmd: |
+    #       kubectl apply -f admin.conf
+
+#arch-vm  thisisunsafe
+#eyJhbGciOiJSUzI1NiIsImtpZCI6Il9BRG9CLUwwa0Z2RjVDSlRfWTVhMk1RZ2JzUElCWDdOd3U5bjhCcndzd0kifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlcm5ldGVzLWRhc2hib2FyZCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJhZG1pbi10b2tlbi1zNzl4cSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJhZG1pbiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6ImI4MmU1NzczLTdlYmEtNDdlMy04ODBjLWY0YjczMWEwYmQyYiIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDprdWJlcm5ldGVzLWRhc2hib2FyZDphZG1pbiJ9.c567NiXgFOFHRqglo0LF9rtKENvCr_gT2n_utHQL6FPBdftmnSbXJEeRMRJ0oqkv6rYWhYNo3rD_WksYcLmRxA9pHwz41vU_n4umH4SnSlLhHSHa7cpxZ2c3yDw3qrSiHYWu_hauR3Gj-OfmDKqaYV0FyRHSxZfKr70SnQNqUu5c3DXkVxxfOfQoHtbszkn-thSqaQJXoE7ZvZ30htsUieonxfSPJ-LooLuBs7rQeWKwfIEfublsgpMHMyDD2OxtA4y23e3MeQVFdy4P_KOzsJiO6hmNOfVKCGd8b7DB3Tk2WK6fkmV12pqu20Q1s7VykjlQe0_WNnGnTLIq3YVQiw
+
+
+# $ kubectl create -f admin.conf
+# $ kubectl -n kubernetes-dashboard get secret |grep admin-token
+# admin-token-fqdpf                  kubernetes.io/service-account-token   3      7m17s
+# # 使用该命令拿到token，然后粘贴到
+# $ kubectl -n kubernetes-dashboard get secret admin-token-fqdpf -o jsonpath={.data.token}|base64 -d
+# eyJhbGciOiJSUzI1NiIsImtpZCI6Ik1rb2xHWHMwbWFPMjJaRzhleGRqaExnVi1BLVNRc2txaEhETmVpRzlDeDQifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlcm5ldGVzLWRhc2hib2FyZCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJhZG1pbi10b2tlbi1mcWRwZiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50Lm5hbWUiOiJhZG1pbiIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjYyNWMxNjJlLTQ1ZG...
+
+      # echo "{{ return_init_msg.stdout }}" > /root/k8sinit.json
+
+  tags: k8stask6
 
 #
 # dashboard  kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.5.0/aio/deploy/recommended.yaml
