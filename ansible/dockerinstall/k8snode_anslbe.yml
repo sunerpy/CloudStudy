@@ -12,6 +12,7 @@
         - '192.168.122.246 k8snode1'
         - '192.168.122.245 k8snode2'
         - '192.168.122.244 k8snode3'
+        - '192.168.122.1 harbor harbor.io'
 
     - name: Setting kernel parameters.
       sysctl:
@@ -56,14 +57,14 @@
           - policycoreutils-python
         state: present
 
-    - name: Setting nmcli
-      nmcli:
-        conn_name: eth0
-        ifname: eth0
-        dns4:
-        - 223.5.5.5
-        - 192.168.122.1
-        state: present
+    # - name: Setting nmcli
+    #   nmcli:
+    #     conn_name: eth0
+    #     ifname: eth0
+    #     dns4:
+    #     - 223.5.5.5
+    #     - 192.168.122.1
+    #     state: present
 
     - name: Setting docker repo
       yum_repository:
@@ -105,19 +106,24 @@
     - name: Set docker registry
       lineinfile:
         #line: '{"registry-mirrors": ["https://y5wbw67l.mirror.aliyuncs.com"]}'
-        line: "{{ item }}"
+        line: |
+          {
+            "exec-opts" : [ "native.cgroupdriver=systemd" ],
+            "registry-mirrors" : [
+              "http://harbor.io",
+              "https://y5wbw67l.mirror.aliyuncs.com",
+              "https://registry.docker-cn.com",
+              "https://dockerhub.azk8s.cn"
+            ]
+            "insecure-registries": [
+              "192.168.122.1:80",
+              "harbor.io",
+              "harbor.io:80"
+            ]
+          }
         path: /etc/docker/daemon.json
         create: True
         state: present
-      with_items:
-        - '{'
-        - '"exec-opts" : [ "native.cgroupdriver=systemd" ],'
-        - '  "registry-mirrors" : ['
-        - '    "https://y5wbw67l.mirror.aliyuncs.com",'
-        - '    "https://registry.docker-cn.com",'
-        - '    "https://dockerhub.azk8s.cn"'
-        - '  ]'
-        - '}'
     
     - name: Enable docker on boot
       service:
