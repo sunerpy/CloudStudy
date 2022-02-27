@@ -1,0 +1,25 @@
+masterip: 192.168.122.246
+mastername: k8snode1
+
+slaveip1: 192.168.122.245
+slavename1: k8snode2
+
+slaveip2: 192.168.122.244
+slavename2: k8snode3
+
+#kvm宿主机ip 和主机名
+kvmip: "192.168.122.1"
+kvmname: 'harbor harbor.io'
+
+kubernetes_version: 1.23.4
+
+k8sdepends_path: /iso/k8s/k8sdepends/kuberpm/
+
+harbor_url: "http://harbor.io"
+harbor_ip: "192.168.122.1"
+harbor_port: 8080
+harbor_io: "harbor.io:8080/sunerpy"
+
+# Pod 网段,flannel插件需要使用这个.Kubernetes使用root目录配置
+flannel_sub: 10.244.0.0/16
+# git clone地址

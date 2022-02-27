@@ -1,0 +1,402 @@
+---
+- name: Tasks for setting k8snodes.
+  hosts: k8snodes
+  tasks:
+    - name: Setting k8s hosts.
+      lineinfile:
+        line: "{{ item }}"
+        path: /etc/hosts
+        create: True
+        state: present
+      with_items:
+        - "{{masterip}} {{mastername}}"
+        - "{{slaveip1}} {{slavename1}}"
+        - "{{slaveip2}} {{slavename2}}"
+        - "{{kvmip}} {{kvmname}}"
+
+    - name: Setting kernel mod
+      modprobe:
+        name: "br_netfilter"
+        state: present
+
+    - name: Setting kernel parameters.
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/k8s.conf
+        state: present
+        reload: yes
+      with_items:
+        - { name: 'net.ipv4.ip_forward',value: 1 }
+        - { name: 'net.bridge.bridge-nf-call-iptables',value: 1 }
+        - { name: 'net.bridge.bridge-nf-call-ip6tables',value: 1 }
+        - { name: 'vm.max_map_count',value: 262144 }
+
+    - name: Setting selinux and firewalld
+      selinux:
+        state: disabled
+    - name: Setting firewalld option on boot
+      service:
+        name: firewalld
+        state: stopped
+        enabled: no
+    - name: Shell script
+      shell: 
+        cmd: |
+          swapoff -a
+          sed -r -i '/^[^#].*swap/{s/^.*$/#&/g}' /etc/fstab
+    
+    - name: Install needed network manager libs
+      package:
+        name:
+          - NetworkManager-libnm
+          - nm-connection-editor
+          - libsemanage-python
+          - policycoreutils-python
+        state: present
+
+    - name: Transform pkgs
+      copy:
+        #src指定docker rpm包的本机路径
+        src: /iso/k8s/dockerrpm
+        dest: /root/
+        force: no
+
+    - name: Enabled temporary repo
+      yum_repository:
+        name: dockerpkg
+        baseurl: file:///root/dockerrpm
+        description: Dockerce
+        enabled: yes
+        gpgcheck: no
+        state: present
+
+    - name: Transform pkgs
+      copy:
+        #src指定docker rpm包的本机路径
+        src: /iso/k8s/kuberpm
+        dest: /root/
+        force: no
+    - name: Enabled temporary kuberepo
+      yum_repository:
+        name: kubepkg
+        baseurl: file:///root/kuberpm
+        description: Kubectl
+        enabled: yes
+        gpgcheck: no
+        state: present    
+
+    - name: Command for yum_repository
+      shell:
+        cmd: |
+          yum clean all
+          yum makecache
+
+    - name: Check docker and enabled it when start.
+      yum:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - 'docker-ce-cli'
+        - 'container-selinux'
+        - 'containerd'
+        - 'docker-ce'
+
+    - name: Set profile of HISTSIZE
+      lineinfile:
+        regexp: "^HISTSIZE=*"
+        path: /etc/profile
+        line: "HISTSIZE=30000"
+
+    - name: Remove original file of docker registry
+      file:
+        path: /etc/docker/daemon.json
+        state: absent
+
+    - name: Set docker registry
+      lineinfile:
+        line: |
+          {
+            "exec-opts" : [ "native.cgroupdriver=systemd" ],
+            "registry-mirrors" : [ "http://harbor.io" ],
+            "insecure-registries": [
+              "192.168.122.1:8080",
+              "harbor.io",
+              "harbor.io:8080"
+            ]
+          }
+        path: /etc/docker/daemon.json
+        create: True
+        state: present
+      with_items:
+        - '{'
+        - '  "exec-opts" : [ "native.cgroupdriver=systemd" ],'
+        - '  "registry-mirrors" : [ "http://harbor.io" ],'
+        - '  "insecure-registries": ['
+        - '    "192.168.122.1:8080",'
+        - '    "harbor.io",'
+        - '    "harbor.io:8080"'
+        - '  ]'
+        - '}'
+    
+    - name: Enable docker on boot
+      service:
+        name: docker
+        state: restarted
+    
+
+
+    - name: Install needed k8s pkgs
+      package:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+    
+    - name: K8s service Onboot
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      with_items:
+        - kubelet
+        - docker
+  tags: k8stask1
+
+- name: Tasks for setting k8s master.
+  hosts: k8smaster
+  tasks:
+    - name: k8s kubeadm.yaml check.
+      shell:
+        cmd: ls /root/kubeadm.yaml
+      register: returnmsg
+      ignore_errors: True
+
+    - name: k8s init settings
+      shell:
+        cmd:
+          kubeadm config print init-defaults > kubeadm.yaml
+      args:
+        chdir: /root/
+      when: returnmsg.rc != 0
+
+    - name: Set profile of kubeadm.yaml
+      lineinfile:
+        regexp: " *advertiseAddress"
+        path: /root/kubeadm.yaml
+        line: "  advertiseAddress: {{ ansible_eth0['ipv4']['address'] }}"
+        backrefs: yes
+
+    - name: Modify imageRepository with harbor
+      lineinfile:
+        regexp: "^imageRepository:"
+        path: /root/kubeadm.yaml
+        line: "imageRepository: harbor.io:8080/sunerpy"
+        backrefs: yes
+
+    - name: Modify k8s master node 
+      lineinfile:
+        regexp: "^ *name:"
+        path: /root/kubeadm.yaml
+        line: "  name: k8snode1"
+        backrefs: yes
+
+    - name: Modify podsubnet with 10.244.0.0/16
+      lineinfile:
+        insertafter: "^ *dnsDomain"
+        path: /root/kubeadm.yaml
+        line: "  podSubnet: 10.244.0.0/16  # Pod 网段,flannel插件需要使用这个网段"
+
+    - name: Modify version
+      lineinfile:
+        regexp: "kubernetesVersion"
+        path: /root/kubeadm.yaml
+        line: "kubernetesVersion: 1.23.4"
+
+    - name: k8s images list
+      shell:
+        cmd:
+          kubeadm config images list --config kubeadm.yaml
+      args:
+        chdir: /root/
+      register: return_image_msg
+
+    - name: k8s images check
+      shell:
+        cmd: |
+          docker images |grep "kube-apiserver"
+      register: return_local_images_msg
+      ignore_errors: True
+    
+    - name: k8s images pull
+      shell:
+        cmd:
+          kubeadm config images pull --config kubeadm.yaml
+      args:
+        chdir: /root/
+      when: return_image_msg.rc == 0 and return_local_images_msg.rc != 0
+
+    # - name: k8sinit.json check
+    #   shell: ls /root/k8sinit.json
+    #   register: return_init_json_msg
+    #   ignore_errors: True
+    - name: k8sinit.json rm
+      shell: 
+        cmd: |
+          kubeadm reset -f
+          rm -f k8sinit.json
+          rm -rf /root/.kube
+          rm -rf /var/lib/cni/
+      register: return_init_json_rm_msg
+      ignore_errors: True
+
+    - name: k8s init settings
+      shell:
+        cmd:
+          kubeadm init --config kubeadm.yaml
+      args:
+        chdir: /root/
+      register: return_init_msg
+      # when: return_init_json_msg.rc != 0
+
+    - name: k8s init once and save result.stdout in json file
+      shell:
+        cmd:
+          echo "{{ return_init_msg.stdout }}" > /root/k8sinit.json
+      args:
+        chdir: /root/
+      # when: return_init_json_rm_msg.rc == 0
+
+          # mkdir -p $HOME/.kube
+          # sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+          # sudo chown $(id -u):$(id -g) $HOME/.kube/config
+    - name: kubectl settings
+      shell:
+        cmd: |
+          mkdir -p /root/.kube
+          sudo cp -f /etc/kubernetes/admin.conf /root/.kube/config
+          sudo chown 0:0 /root/.kube/config
+          export KUBECONFIG=/etc/kubernetes/admin.conf
+      when: return_init_msg.rc == 0
+
+    - name: Getting remote file in ansible node .
+      fetch:
+        src: /root/k8sinit.json
+        dest: /home/admin/CloudStudy/ansible/dockerinstall/
+  tags: k8stask2
+
+
+- name: Tasks for setting k8s slave
+  hosts: k8sslave
+  tasks:
+    - name: copy k8smaster file to slave
+      copy:
+        src: /home/admin/CloudStudy/ansible/dockerinstall/k8snode1/root/k8sinit.json
+        dest: /root/k8sinit.json
+
+    - name: k8smaster init code
+      shell:
+        cmd: sed -n '/kubeadm join/s/\t/ /g p' /root/k8sinit.json
+      register: return_k8s_join_msg
+
+    - name: debug info1
+      debug: 
+        msg: "return code is {{ return_k8s_join_msg.rc  }}\n {{ return_k8s_join_msg.stdout }}"
+    - name: k8s slave join
+      shell:
+        cmd: |
+          kubeadm reset -f
+          {{return_k8s_join_msg.stdout}}
+      register: return_k8s_joincode_msg
+    - name: debug info
+      debug: "return code is {{ return_k8s_joincode_msg.rc  }}"
+  tags: k8stask3
+
+- name: Tasks for all nodes
+  hosts: k8snodes
+  tasks:
+    - name: Modify auto complete.
+      lineinfile:
+        regexp: "source /usr/share/bash-completion"
+        path: /root/.bash_profile
+        line: "source /usr/share/bash-completion/bash_completion"
+    - name: Modify auto complete2.
+      lineinfile:
+        regexp: "kubectl completion bash"
+        path: /root/.bash_profile
+        line: "source <(kubectl completion bash)"
+  tags: k8stask4
+
+- name: Tasks for k8smaster
+  hosts: k8smaster
+  tasks:
+    # - name: Install flannel
+    #   uri:
+    #     url: https://raw.githubusercontent.com/coreos/flannel/2140ac876ef134e0ed5af15c65e414cf26827915/Documentation/kube-flannel.yml
+    #     dest: /root/kube-flannel.yml
+    #   when: return_local_images_msg.rc == 0
+    
+    #
+    - name: Push flannel.yml
+      copy:
+        src: kube-flannel.yml
+        dest: /root/kube-flannel.yml
+      # when: return_k8s_joincode_msg.rc == 0
+    - name: Modify flannel network and pull images
+      shell:
+        cmd: |
+          docker pull quay.io/coreos/flannel:v0.11.0-amd64
+          kubectl apply -f kube-flannel.yml
+          kubectl taint node k8snode1 node-role.kubernetes.io/master:NoSchedule-
+  tags: k8stask5
+
+- name: dashboard tasks
+  hosts: k8snode1
+  tasks:
+    - name: Verify master.
+      shell:
+        cmd: 
+          kubectl get nodes|tail -n +2|awk '{print $2}'|grep -v Ready
+      register: return_nodes_state_msg
+      ignore_errors: True
+    - name: Verify master again
+      shell:
+        cmd:
+          echo "Successfully"
+      when: return_nodes_state_msg.rc != 0
+    - name: Deploy dashboard
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items:
+        - { src: 'recommended.yaml', dest: '/root/recommended.yaml' }
+        - { src: 'admin.conf', dest: '/root/admin.conf' }
+
+    - name: Modify dashboard yml
+      shell:
+        cmd: |
+          kubectl apply -f recommended.yaml
+          kubectl -n  kubernetes-dashboard get svc
+      register: return_k8s_dashboard_msg
+    - name: Get port msg
+      shell:
+        cmd:
+          echo "{{ return_k8s_dashboard_msg.stdout }}" > /root/dashboard.info
+          awk '/dashboard/{print $5}'
+      register: return_k8s_dashboard_port_msg
+    - name: Get dashboard info.
+      fetch:
+        src: /root/dashboard.info
+        dest: ./
+
+  tags: k8stask6
+
+- name: Some settings for all node.
+  hosts: k8snodes
+  tasks:
+    - name: Modify bash-completion for kubernetes.
+      lineinfile:
+      regexp: "source <(kubectl completion bash)"
+      path: /root/.bashrc
+      line: "source <(kubectl completion bash)"
